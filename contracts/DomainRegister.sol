@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.19;
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 error DomainAlreadyRegistered(string domain);
 error FeeMustBeGreaterThanZero();
@@ -7,11 +9,9 @@ error FeeMustDifferFromCurrent();
 error InsufficientPayment(uint256 requiredFee);
 error InvalidControllerAddress();
 error NotTopLevelDomain(string domain);
-error OnlyOwner();
 
-contract DomainRegister {
+contract DomainRegister is Initializable, OwnableUpgradeable {
     uint256 public fee;
-    address public owner;
     uint public totalDomains;
     mapping(address => string[]) public controllerDomains;
     mapping(string => bool) public registeredDomains;
@@ -22,19 +22,14 @@ contract DomainRegister {
     );
     event FeeChanged(uint256 newFee);
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
-        _;
-    }
-
     /**
     * @dev Sets the contract owner and initializes the registration fee with a valid value.
-    * @param defaultFee The initial fee amount for domain registration, must be greater than zero.
+    * @param _defaultFee The initial fee amount for domain registration, must be greater than zero.
     */
-    constructor(uint256 defaultFee) payable {
-        if (defaultFee <= 0) revert InsufficientPayment({requiredFee: 1});
-        owner = msg.sender;
-        fee = defaultFee;
+    function initialize(uint256 _defaultFee) public initializer {
+        __Ownable_init();
+        if (_defaultFee <= 0) revert FeeMustBeGreaterThanZero();
+        fee = _defaultFee;
     }
 
     /**
@@ -55,7 +50,7 @@ contract DomainRegister {
 
         emit DomainRegistered(domain, controller);
 
-        payable(owner).transfer(fee);
+        payable(owner()).transfer(fee);
 
         if (msg.value > fee) {
            payable(msg.sender).transfer(msg.value - fee);

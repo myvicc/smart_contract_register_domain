@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import pkg from 'hardhat';
-const { ethers } = pkg;
+const { ethers, upgrades } = pkg;
 
     let domainRegister;
     let owner, anotherAddress, otherAddress;
@@ -10,7 +10,7 @@ const { ethers } = pkg;
     before(async function () {
         const DomainRegister = await ethers.getContractFactory("DomainRegister");
         [owner, anotherAddress, otherAddress] = await ethers.getSigners();
-        domainRegister = await DomainRegister.deploy(registrationFee);
+        domainRegister = await upgrades.deployProxy(DomainRegister, [registrationFee], {initializer: 'initialize'});
     });
 
     describe("Registration", function () {
@@ -43,7 +43,7 @@ const { ethers } = pkg;
 
         it("Should prevent non-owners from changing the registration fee", async function () {
             await expect(domainRegister.connect(anotherAddress).changeFee(newFee))
-                .to.be.revertedWithCustomError(domainRegister, "OnlyOwner");
+                .to.be.revertedWith("Ownable: caller is not the owner");
         });
     });
 

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "hardhat test",
     "compile": "hardhat compile",
-    "deploy": "hardhat run scripts/deploy.js",
+    "deploy": "hardhat run scripts/deploy.js --network localhost",
     "node": "hardhat node"
   },
   "keywords": [],
@@ -19,6 +19,9 @@
     "mocha": "^10.3.0"
   },
   "dependencies": {
-    "ethers": "^6.6.5"
+    "ethers": "^6.7.1",
+    "@openzeppelin/contracts": "^4.9.3",
+    "@openzeppelin/contracts-upgradeable": "^4.9.3",
+    "@openzeppelin/hardhat-upgrades": "^2.2.1"
   }
 }
