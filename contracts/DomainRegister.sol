@@ -39,19 +39,6 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
     }
 
     /**
-    * @dev Sets the reward distribution rate for domain registrations.
-    * @param _rate The percentage of the registration fee that will be distributed as rewards.
-    *      This rate must be a whole number representing the percentage (0-100).
-    *      For example, a rate of 10 means 10% of the registration fee is distributed as a reward.
-    * @notice Only the owner of the contract can set the reward distribution rate.
-    *      The rate cannot exceed 100%.
-    */
-    function setRewardDistributionRate(uint256 _rate) external onlyOwner {
-        require(_rate <= 100, "Rate cannot be more than 100%");
-        rewardDistributionRate = _rate;
-    }
-
-    /**
     * @notice Distributes rewards up the domain hierarchy.
     * @dev This function calculates and distributes rewards to controllers of parent domains based on the reward distribution rate.
     * @param domain The domain name for which rewards are being distributed.
