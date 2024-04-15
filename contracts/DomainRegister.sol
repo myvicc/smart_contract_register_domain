@@ -83,7 +83,6 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
         if (offset >= registerCount) {
             return new string[](0) ;
         }
-
         uint256 resultSize = (registerCount - offset > limit) ? limit : registerCount - offset;
         string[] memory domains = new string[](resultSize);
 
