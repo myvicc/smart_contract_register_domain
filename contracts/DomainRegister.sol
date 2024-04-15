@@ -50,7 +50,8 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
 
         emit DomainRegistered(domain, controller);
 
-        payable(owner()).transfer(fee);
+        (bool success, ) = payable(owner()).call{value: fee}("");
+        require(success, "Transfer failed.");
 
         if (msg.value > fee) {
            payable(msg.sender).transfer(msg.value - fee);
