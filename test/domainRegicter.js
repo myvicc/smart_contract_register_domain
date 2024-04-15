@@ -3,14 +3,15 @@ import pkg from 'hardhat';
 const { ethers, upgrades } = pkg;
 
     let domainRegister;
-    let owner, anotherAddress, otherAddress;
+    let owner, anotherAddress, otherAddress, other2Address;
     let registrationFee = ethers.parseEther("0.01");
     let newFee = ethers.parseEther("0.02");
+    let rewardDistributionRate = 10n;
 
-    before(async function () {
+beforeEach(async function () {
         const DomainRegister = await ethers.getContractFactory("DomainRegister");
-        [owner, anotherAddress, otherAddress] = await ethers.getSigners();
-        domainRegister = await upgrades.deployProxy(DomainRegister, [registrationFee], {initializer: 'initialize'});
+        [owner, anotherAddress, otherAddress, other2Address] = await ethers.getSigners();
+        domainRegister = await upgrades.deployProxy(DomainRegister, [registrationFee, rewardDistributionRate], {initializer: 'initialize'});
     });
 
     describe("Registration", function () {
@@ -137,4 +138,49 @@ const { ethers, upgrades } = pkg;
                 .to.emit(domainRegister, "FeeChanged")
                 .withArgs(newFee);
         });
+        it("emits a RewardDistributed event when rewards are distributed up the domain hierarchy", async function() {
+            const parentDomain = "example.com";
+            const childDomain = "sub.example.com";
+            await domainRegister.registerDomain(parentDomain, owner.address, { value: registrationFee });
+            const tx = await domainRegister.registerDomain(childDomain, owner.address, { value: registrationFee });
+            const rewardAmount = registrationFee * rewardDistributionRate / 100n
+            await expect(tx)
+                .to.emit(domainRegister, "RewardDistributed")
+                .withArgs(parentDomain, rewardAmount);
+        });
     });
+
+describe("getAllParentDomains", function() {
+    it("should correctly extract all parent domains for a subdomain", async function() {
+        expect(await domainRegister.getAllParentDomains("example1.subdomain.example.com"))
+            .to.deep.equal(["com", "example.com","subdomain.example.com"]);
+    });
+    it("should correctly handle second-level domains", async function() {
+        expect(await domainRegister.getAllParentDomains("example.com"))
+            .to.deep.equal(["com"]);
+    });
+    it("should return an empty array for top-level domains", async function() {
+        expect(await domainRegister.getAllParentDomains("com"))
+            .to.deep.equal([]);
+    });
+    it("should correctly extract all parent domains for a subdomain", async function() {
+        expect(await domainRegister.getAllParentDomains("new.example1.subdomain.example.com"))
+            .to.deep.equal(["com", "example.com","subdomain.example.com", "example1.subdomain.example.com"]);
+    });
+});
+describe("collect rewards", function () {
+    it("should correctly collect reward for all parent domains and owner", async function() {
+        const initOwnerBalance = await ethers.provider.getBalance(owner.address)
+        await domainRegister.connect(anotherAddress).registerDomain("org", anotherAddress.address, { value: registrationFee });
+        expect(await ethers.provider.getBalance(owner.address)).to.equal(initOwnerBalance + registrationFee);
+        const initOwnerBalance1 = await ethers.provider.getBalance(owner.address)
+        await domainRegister.connect(otherAddress).registerDomain("test.org", otherAddress.address, { value: registrationFee });
+        const feeForDomain = registrationFee * rewardDistributionRate / 100n
+        expect(await domainRegister.domainRewards("org")).to.equal( feeForDomain);
+        expect(await ethers.provider.getBalance(owner.address)).to.equal(initOwnerBalance1 + registrationFee - feeForDomain);
+        await domainRegister.connect(other2Address).registerDomain("new.test.org", other2Address.address, { value: registrationFee });
+        expect(await ethers.provider.getBalance(owner.address)).to.equal(initOwnerBalance1 + registrationFee - feeForDomain + registrationFee - feeForDomain - feeForDomain);
+        expect(await domainRegister.domainRewards("org")).to.equal( feeForDomain * 2n);
+        expect(await domainRegister.domainRewards("test.org")).to.equal( feeForDomain);
+    })
+})
