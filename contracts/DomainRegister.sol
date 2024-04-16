@@ -49,13 +49,15 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
         totalDomains += 1;
 
         emit DomainRegistered(domain, controller);
-
-        (bool success, ) = payable(owner()).call{value: fee}("");
-        require(success, "Transfer failed.");
+        _safeTransfer(owner(), fee);
 
         if (msg.value > fee) {
-           payable(msg.sender).transfer(msg.value - fee);
+            _safeTransfer(msg.sender, msg.value - fee);
         }
+    }
+    function _safeTransfer(address to, uint256 amount) private {
+        (bool success, ) = to.call{value: amount}("");
+        require(success, "Transfer failed");
     }
 
     /**
