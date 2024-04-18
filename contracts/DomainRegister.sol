@@ -11,14 +11,23 @@ error InvalidControllerAddress();
 error TransferFailed();
 
 contract DomainRegister is Initializable, OwnableUpgradeable {
-    uint256 public fee;
-    uint256 public totalDomains;
-    uint256 public rewardDistributionRate;
+    struct DomainStorage {
+        uint256 fee;
+        uint totalDomains;
+        uint256 rewardDistributionRate;
 
-    mapping(address => string[]) public controllerDomains;
-    mapping(string => bool) public registeredDomains;
-    mapping(string => uint256) public domainRewards;
-    mapping(string => address) public domainController;
+        mapping(address => string[]) controllerDomains;
+        mapping(string => bool) registeredDomains;
+        mapping(string => uint256) domainRewards;
+        mapping(string => address) domainController;
+    }
+
+    bytes32 private constant DomainStorageLocation = 0xe883eb4257b84497a2d75d72086944e71c11e3651be7aa24d21030462e3f0600;
+    function _getDomainStorage() private pure returns (DomainStorage storage $) {
+        assembly {
+            $.slot := DomainStorageLocation
+        }
+    }
 
     event DomainRegistered(string domain, address indexed controller);
     event FeeChanged(uint256 newFee);
@@ -34,8 +43,8 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
     ) public initializer {
         __Ownable_init();
         if (_defaultFee <= 0) revert FeeMustBeGreaterThanZero();
-        fee = _defaultFee;
-        rewardDistributionRate = _rewardDistributionRate;
+        _getDomainStorage().fee = _defaultFee;
+        _getDomainStorage().rewardDistributionRate = _rewardDistributionRate;
     }
 
     /**
@@ -61,10 +70,10 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
         totalDistributed = 0;
         uint256 currentReward = rewardAmount;
         for (uint256 i = 0; i < parentDomains.length; i++) {
-            if (registeredDomains[parentDomains[i]]) {
-                address controller = domainController[parentDomains[i]];
+            if (_getDomainStorage().registeredDomains[parentDomains[i]]) {
+                address controller = _getDomainStorage().domainController[parentDomains[i]];
                 if (controller != address(0)) {
-                    domainRewards[parentDomains[i]] += currentReward;
+                    _getDomainStorage().domainRewards[parentDomains[i]] += currentReward;
                     emit RewardDistributed(parentDomains[i], currentReward);
                     totalDistributed += currentReward;
                 }
@@ -90,26 +99,26 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
         string calldata domain,
         address controller
     ) external payable {
-        if (registeredDomains[domain])
+        if (_getDomainStorage().registeredDomains[domain])
             revert DomainAlreadyRegistered({domain: domain});
-        if (msg.value < fee) revert InsufficientPayment({requiredFee: fee});
+        if (msg.value < _getDomainStorage().fee) revert InsufficientPayment({requiredFee: _getDomainStorage().fee});
         if (controller == address(0)) revert InvalidControllerAddress();
 
-        registeredDomains[domain] = true;
-        domainController[domain] = controller;
-        controllerDomains[controller].push(domain);
-        totalDomains += 1;
+        _getDomainStorage().registeredDomains[domain] = true;
+        _getDomainStorage().domainController[domain] = controller;
+        _getDomainStorage().controllerDomains[controller].push(domain);
+        _getDomainStorage().totalDomains += 1;
 
-        uint256 reward = (fee * rewardDistributionRate) / 100;
+        uint256 reward = (_getDomainStorage().fee * _getDomainStorage().rewardDistributionRate) / 100;
         uint256 totalReward = distributeRewards(domain, reward);
 
         emit DomainRegistered(domain, controller);
 
-        uint256 feeForOwner = fee - totalReward;
+        uint256 feeForOwner = _getDomainStorage().fee - totalReward;
 
         _safeTransfer(owner(), feeForOwner);
-        if (msg.value > fee) {
-            _safeTransfer(msg.sender, msg.value - fee);
+        if (msg.value > _getDomainStorage().fee) {
+            _safeTransfer(msg.sender, msg.value - _getDomainStorage().fee);
         }
     }
 
@@ -198,8 +207,8 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
      */
     function changeFee(uint256 newFee) external onlyOwner {
         if (newFee <= 0) revert FeeMustBeGreaterThanZero();
-        if (newFee == fee) revert FeeMustDifferFromCurrent();
-        fee = newFee;
+        if (newFee == _getDomainStorage().fee) revert FeeMustDifferFromCurrent();
+        _getDomainStorage().fee = newFee;
         emit FeeChanged(newFee);
     }
 
@@ -215,7 +224,7 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
         uint256 offset,
         uint256 limit
     ) external view returns (string[] memory) {
-        string[] memory registerDomains = controllerDomains[controller];
+        string[] memory registerDomains = _getDomainStorage().controllerDomains[controller];
         uint256 registerCount = registerDomains.length;
 
         if (offset >= registerCount) {
@@ -231,5 +240,18 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
             domains[i] = registerDomains[offset + i];
         }
         return domains;
+    }
+
+    function getDomainStorageForTesting(string calldata domain) external view returns (bool) {
+        return _getDomainStorage().registeredDomains[domain];
+    }
+    function getFeeForTesting() external view returns (uint256) {
+        return _getDomainStorage().fee;
+    }
+    function getTotalDomainsForTesting() external view returns (uint256) {
+        return _getDomainStorage().totalDomains;
+    }
+    function getRewardForDomain(string memory domain) external view returns (uint256) {
+        return _getDomainStorage().domainRewards[domain];
     }
 }
