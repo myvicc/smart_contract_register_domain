@@ -9,12 +9,21 @@ error FeeMustDifferFromCurrent();
 error InsufficientPayment(uint256 requiredFee);
 error InvalidControllerAddress();
 error NotTopLevelDomain(string domain);
-
 contract DomainRegister is Initializable, OwnableUpgradeable {
-    uint256 public fee;
-    uint public totalDomains;
-    mapping(address => string[]) public controllerDomains;
-    mapping(string => bool) public registeredDomains;
+    struct DomainStorage {
+        uint256 fee;
+        uint totalDomains;
+        mapping(address => string[]) controllerDomains;
+        mapping(string => bool) registeredDomains;
+    }
+
+    bytes32 private constant DomainStorageLocation = 0xe883eb4257b84497a2d75d72086944e71c11e3651be7aa24d21030462e3f0600;
+    function _getDomainStorage() private pure returns (DomainStorage storage $) {
+    assembly {
+    $.slot := DomainStorageLocation
+     }
+    }
+
 
     event DomainRegistered(
         string domain,
@@ -29,7 +38,7 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
     function initialize(uint256 _defaultFee) public initializer {
         __Ownable_init();
         if (_defaultFee <= 0) revert FeeMustBeGreaterThanZero();
-        fee = _defaultFee;
+        _getDomainStorage().fee = _defaultFee;
     }
 
     /**
@@ -39,20 +48,20 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
     * @param controller The wallet address that will control the domain.
     */
     function registerDomain(string calldata domain, address controller) external payable {
-        if (registeredDomains[domain]) revert DomainAlreadyRegistered({domain: domain});
-        if (msg.value < fee) revert InsufficientPayment({requiredFee: fee});
+        if (_getDomainStorage().registeredDomains[domain]) revert DomainAlreadyRegistered({domain: domain});
+        if (msg.value < _getDomainStorage().fee) revert InsufficientPayment({requiredFee: _getDomainStorage().fee});
         if (controller == address(0)) revert InvalidControllerAddress();
         if (countDots(domain) != 1) revert NotTopLevelDomain({domain: domain});
 
-        registeredDomains[domain] = true;
-        controllerDomains[controller].push(domain);
-        totalDomains += 1;
+        _getDomainStorage().registeredDomains[domain] = true;
+        _getDomainStorage().controllerDomains[controller].push(domain);
+        _getDomainStorage().totalDomains += 1;
 
         emit DomainRegistered(domain, controller);
-        _safeTransfer(owner(), fee);
+        _safeTransfer(owner(), _getDomainStorage().fee);
 
-        if (msg.value > fee) {
-            _safeTransfer(msg.sender, msg.value - fee);
+        if (msg.value > _getDomainStorage().fee) {
+            _safeTransfer(msg.sender, msg.value - _getDomainStorage().fee);
         }
     }
     function _safeTransfer(address to, uint256 amount) private {
@@ -67,8 +76,8 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
     */
     function changeFee(uint256 newFee) external onlyOwner {
         if (newFee <= 0) revert FeeMustBeGreaterThanZero();
-        if (newFee == fee) revert FeeMustDifferFromCurrent();
-        fee = newFee;
+        if (newFee == _getDomainStorage().fee) revert FeeMustDifferFromCurrent();
+        _getDomainStorage().fee = newFee;
         emit FeeChanged(newFee);
     }
 
@@ -80,7 +89,7 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
     * @return domains A subset of domain names associated with the controller's address.
     */
     function getControllerDomains(address controller, uint256 offset, uint256 limit) external view returns (string[] memory) {
-        string[] memory registerDomains = controllerDomains[controller];
+        string[] memory registerDomains = _getDomainStorage().controllerDomains[controller];
         uint256 registerCount = registerDomains.length;
 
         if (offset >= registerCount) {
