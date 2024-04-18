@@ -24,16 +24,6 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
      }
     }
 
-    function getDomainStorageForTesting(string calldata domain) external view returns (bool) {
-        return _getDomainStorage().registeredDomains[domain];
-    }
-    function getFeeForTesting() external view returns (uint256) {
-        return _getDomainStorage().fee;
-    }
-    function getTotalDomainsForTesting() external view returns (uint256) {
-        return _getDomainStorage().totalDomains;
-    }
-
     event DomainRegistered(
         string domain,
         address indexed controller
@@ -128,5 +118,15 @@ contract DomainRegister is Initializable, OwnableUpgradeable {
             }
         }
         return dotCount;
+    }
+
+    function getDomainStorageForTesting(string calldata domain) external view returns (bool) {
+        return _getDomainStorage().registeredDomains[domain];
+    }
+    function getFeeForTesting() external view returns (uint256) {
+        return _getDomainStorage().fee;
+    }
+    function getTotalDomainsForTesting() external view returns (uint256) {
+        return _getDomainStorage().totalDomains;
     }
 }
